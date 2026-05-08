@@ -1,0 +1,6 @@
+armes_cendres:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: /home/vanel/armes-cendres/data/armes_cendres.duckdb

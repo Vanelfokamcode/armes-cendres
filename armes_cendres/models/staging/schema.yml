@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: stg_sipri
+    description: "Transferts d'armes françaises nettoyés (SIPRI)"
+    columns:
+      - name: country
+        description: "Pays destinataire"
+      - name: year_order
+        description: "Année de la commande"
+      - name: tiv_delivered
+        description: "TIV SIPRI livré (millions)"
+
+  - name: stg_acled
+    description: "Événements de violence politique agrégés par pays/année/mois (ACLED)"
+    columns:
+      - name: country
+        description: "Pays"
+      - name: year
+        description: "Année"
+      - name: total_events
+        description: "Nombre d'événements violents"
+      - name: total_fatalities
+        description: "Nombre de morts"
