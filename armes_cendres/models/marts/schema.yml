@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: panel_data
+    description: "Panel country x year : TIV SIPRI livré + conflits ACLED"
+    columns:
+      - name: country
+        description: "Pays destinataire"
+      - name: year
+        description: "Année"
+      - name: tiv_delivered
+        description: "TIV SIPRI livré cette année (millions)"
+      - name: conflict_events
+        description: "Nombre d'événements violents ACLED"
+      - name: conflict_fatalities
+        description: "Nombre de morts ACLED"
