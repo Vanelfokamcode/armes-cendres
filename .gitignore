@@ -1,4 +1,11 @@
 # Byte-compiled / optimized / DLL files
+.venv/
+__pycache__/
+*.pyc
+.env
+*.duckdb
+data/raw/*.csv
+
 __pycache__/
 *.py[codz]
 *$py.class
