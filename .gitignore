@@ -3,7 +3,7 @@
 __pycache__/
 *.pyc
 .env
-*.duckdb
+
 data/raw/*.csv
 
 __pycache__/
