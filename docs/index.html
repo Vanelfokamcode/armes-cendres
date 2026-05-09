@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Armes & Cendres</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0d0d0d; color: #e0e0e0; font-family: 'Courier New', monospace; }
+    header { padding: 1.5rem 2rem; border-bottom: 1px solid #333; }
+    header h1 { font-size: 1.4rem; color: #ff4444; letter-spacing: 2px; }
+    header p  { font-size: 0.8rem; color: #888; margin-top: 0.3rem; }
+    #main { display: grid; grid-template-columns: 1fr 1fr; height: calc(100vh - 80px); }
+    #map { height: 100%; background: #111; }
+    #sidebar { padding: 1.5rem; overflow-y: auto; border-left: 1px solid #333; }
+    #sidebar h2 { font-size: 0.9rem; color: #ff4444; margin-bottom: 1rem; letter-spacing: 1px; }
+    #chart-container { margin-bottom: 2rem; }
+    canvas { max-height: 220px; }
+    #granger-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    #granger-table th { color: #ff4444; border-bottom: 1px solid #333; padding: 0.4rem 0.6rem; text-align: left; }
+    #granger-table td { padding: 0.4rem 0.6rem; border-bottom: 1px solid #1a1a1a; }
+    #granger-table tr:hover td { background: #1a1a1a; cursor: pointer; }
+    .sig { color: #ff4444; font-weight: bold; }
+    #country-title { font-size: 0.85rem; color: #aaa; margin-bottom: 0.8rem; }
+    .legend { font-size: 0.72rem; color: #666; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⚔️ ARMES & CENDRES</h1>
+  <p>Les exportations d'armes françaises précèdent-elles les conflits ? — Test de causalité de Granger</p>
+</header>
+
+<div id="main">
+  <div id="map"></div>
+  <div id="sidebar">
+    <div id="chart-container">
+      <div id="country-title">← Cliquez un pays sur la carte</div>
+      <canvas id="chart"></canvas>
+    </div>
+    <h2>RÉSULTATS GRANGER (p &lt; 0.05)</h2>
+    <table id="granger-table">
+      <thead><tr><th>Pays</th><th>Lag</th><th>p-value</th></tr></thead>
+      <tbody id="granger-body"></tbody>
+    </table>
+    <p class="legend">Lag = délai en années entre livraison d'armes et montée des conflits</p>
+  </div>
+</div>
+
+<script>
+const API = "https://armes-cendres.onrender.com";
+let chartInstance = null;
+
+// Init carte
+const map = L.map('map', { zoomControl: true }).setView([20, 10], 2);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap © CARTO', maxZoom: 18
+}).addTo(map);
+
+// Charge résultats Granger
+async function loadGranger() {
+  const res  = await fetch(`${API}/granger?significant_only=true`);
+  const data = await res.json();
+
+  const tbody = document.getElementById('granger-body');
+  tbody.innerHTML = '';
+  data.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="sig">${r.country}</td><td>${r.lag}y</td><td>${r.pvalue}</td>`;
+    tr.onclick = () => loadCountry(r.country);
+    tbody.appendChild(tr);
+  });
+
+  // Pays significatifs pour la carte
+  const sigCountries = [...new Set(data.map(r => r.country))];
+  loadMap(sigCountries);
+}
+
+// Charge panel d'un pays et affiche le chart
+async function loadCountry(country) {
+  document.getElementById('country-title').textContent = `📊 ${country}`;
+  const res  = await fetch(`${API}/panel/${encodeURIComponent(country)}`);
+  const data = await res.json();
+
+  const labels     = data.map(d => d.year);
+  const tiv        = data.map(d => d.tiv_delivered);
+  const conflicts  = data.map(d => d.conflict_events);
+
+  if (chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(document.getElementById('chart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'TIV livré (M$)',
+          data: tiv,
+          backgroundColor: 'rgba(255,68,68,0.7)',
+          yAxisID: 'y'
+        },
+        {
+          label: 'Conflits ACLED',
+          data: conflicts,
+          type: 'line',
+          borderColor: '#fff',
+          backgroundColor: 'transparent',
+          pointRadius: 2,
+          yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#aaa', font: { size: 10 } } } },
+      scales: {
+        x:  { ticks: { color: '#666', font: { size: 9 } }, grid: { color: '#1a1a1a' } },
+        y:  { ticks: { color: '#ff4444', font: { size: 9 } }, grid: { color: '#1a1a1a' } },
+        y1: { position: 'right', ticks: { color: '#aaa', font: { size: 9 } }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+// Markers sur la carte pour les pays significatifs
+async function loadMap(sigCountries) {
+  const res  = await fetch(`${API}/top?n=50`);
+  const data = await res.json();
+
+  // Coordonnées approximatives
+  const coords = {
+    "Laos": [17.9, 102.6], "Ukraine": [49.0, 31.5], "Belgium": [50.8, 4.3],
+    "Turkmenistan": [38.9, 59.6], "Croatia": [45.1, 15.2], "Georgia": [42.3, 43.4],
+    "Hungary": [47.2, 19.5], "Serbia": [44.0, 21.0], "Portugal": [39.4, -8.2],
+    "Indonesia": [-0.8, 113.9], "Cyprus": [35.1, 33.4], "Bolivia": [-16.5, -68.1],
+    "United States": [37.1, -95.7], "India": [20.6, 78.9], "Egypt": [26.8, 30.8],
+    "Saudi Arabia": [23.9, 45.1], "Morocco": [31.8, -7.1], "Brazil": [-14.2, -51.9],
+    "United Arab Emirates": [23.4, 53.8], "Greece": [39.1, 21.8]
+  };
+
+  data.forEach(d => {
+    const c = coords[d.country];
+    if (!c) return;
+    const isSig = sigCountries.includes(d.country);
+    const color = isSig ? '#ff4444' : '#444';
+    const r     = Math.max(5, Math.min(20, Math.sqrt(d.tiv_total) / 3));
+
+    L.circleMarker(c, {
+      radius: r, fillColor: color, color: '#000',
+      weight: 1, opacity: 1, fillOpacity: 0.75
+    })
+    .addTo(map)
+    .bindTooltip(`${d.country}<br>TIV: ${Math.round(d.tiv_total)}M${isSig ? '<br>⚠️ Granger sig.' : ''}`)
+    .on('click', () => loadCountry(d.country));
+  });
+}
+
+loadGranger();
+</script>
+</body>
+</html>
